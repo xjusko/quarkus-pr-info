@@ -8,7 +8,7 @@
     <version>1.0-SNAPSHOT</version>
 
     <build>
-        <finalName>quarkus-github-pr-info</finalName>
+        <finalName>quarkus-pr-info</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -45,8 +45,8 @@
     </build>
 
     <properties>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
     </properties>
 
 

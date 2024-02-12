@@ -17,7 +17,7 @@ This will compile the code, run tests, and create an executable JAR file in the 
 After building the project, you can run the application using the generated JAR file. Use the following command:
 
 ```bash
-java -jar target/<your-jar-filename>.jar <GitHub-token> [<startDate> <endDate>]
+java -jar target/quarkus-pr-info.jar <GitHub-token> [<startDate> <endDate>]
 ```
 
 ### Arguments:
@@ -31,17 +31,17 @@ java -jar target/<your-jar-filename>.jar <GitHub-token> [<startDate> <endDate>]
 1. **Get all pull requests:**
 
     ```bash
-    java -jar target/<your-jar-filename>.jar <GitHub-token>
+    java -jar target/quarkus-pr-info.jar <GitHub-token>
     ```
 
 2. **Get pull requests after a specific start date:**
 
     ```bash
-    java -jar target/<your-jar-filename>.jar <GitHub-token> 20-02-2022
+    java -jar target/quarkus-pr-info.jar <GitHub-token> 20-02-2022
     ```
 
 3. **Get pull requests between a start and end date:**
 
     ```bash
-    java -jar target/<your-jar-filename>.jar <GitHub-token> 01-01-2022 01-01-2023
+    java -jar target/quarkus-pr-info.jar <GitHub-token> 01-01-2022 01-01-2023
     ```
