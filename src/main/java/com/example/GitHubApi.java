@@ -24,8 +24,6 @@ public class GitHubApi {
     private Date startDate = new Date(Long.MIN_VALUE);
     private Date endDate = new Date(Long.MAX_VALUE);
     private final SimpleDateFormat BASIC_DATE_FORMAT = createDateFormat("dd-MM-yyyy");
-
-    // Specify the repository owner and name
     private final String repoOwner = "quarkusio";
     private final String repoName = "quarkus";
 
@@ -53,7 +51,6 @@ public class GitHubApi {
     }
 
     public String extractIssueNumberFromBody(String body) {
-        // Check if body is null
         if (body == null) {
             return "No linked issue";
         }
@@ -76,7 +73,6 @@ public class GitHubApi {
     }
 
     public List<JsonNode> filterPullRequests(JsonNode pullRequests, List<String> logins, Date startDate, Date endDate) {
-        // Filter pull requests based on specified logins and merged date
         List<JsonNode> filteredPullRequests = new ArrayList<>();
 
         for (JsonNode pr : pullRequests) {
@@ -105,10 +101,7 @@ public class GitHubApi {
     }
 
     public List<JsonNode> getPullRequests(List<String> logins) throws URISyntaxException, IOException, InterruptedException, ParseException {
-        // Initialize an empty list to store all pull requests
         List<JsonNode> allPullRequests = new ArrayList<>();
-
-        // Set the start and end dates for the range of interest
 
         int page = 1; // Initialize page counter
 
@@ -125,41 +118,38 @@ public class GitHubApi {
             // Check if the response is valid JSON
             JsonNode pullRequests = new ObjectMapper().readTree(response.body());
 
-            // Filter and add pull requests to the list
             List<JsonNode> filteredPullRequests = filterPullRequests(pullRequests, logins, startDate, endDate);
             allPullRequests.addAll(filteredPullRequests);
-
-            // Check if there is another page
 
             if (!response.headers().firstValue("Link").orElse("").contains("rel=\"next\"") || isClosedBeforeDate(pullRequests, startDate)) {
                 break; // No more pages, exit the loop
             }
 
-            page++; // Move to the next page
+            page++;
         }
         return allPullRequests;
     }
 
-    public void printPullRequestInfo(JsonNode pullRequest) {
-        // Print information about the pull request
-        JsonNode user = pullRequest.get("user");
-        String pullRequestLink = getPullRequestLink(pullRequest.get("number").asInt());
-        String body = pullRequest.get("body").asText();
-        String issueNumber = extractIssueNumberFromBody(body);
+    public void printPullRequestInfo(List<JsonNode> pullRequests) {
+        for (JsonNode pullRequest: pullRequests) {
+            JsonNode user = pullRequest.get("user");
+            String pullRequestLink = getPullRequestLink(pullRequest.get("number").asInt());
+            String body = pullRequest.get("body").asText();
+            String issueNumber = extractIssueNumberFromBody(body);
 
-        Date mergedDate;
-        try {
-            mergedDate = PR_DATE_FORMAT.parse(pullRequest.get("merged_at").asText());
-        } catch (ParseException e) {
-            throw new RuntimeException("Error parsing date", e);
+            Date mergedDate;
+            try {
+                mergedDate = PR_DATE_FORMAT.parse(pullRequest.get("merged_at").asText());
+            } catch (ParseException e) {
+                throw new RuntimeException("Error parsing date", e);
+            }
+            String formattedMergedDate = BASIC_DATE_FORMAT.format(mergedDate);
+
+            System.out.printf("Pull Request: %s, User: %s, Merged at: %s, Linked Issue ID: %s%n", pullRequestLink, user.get("login").asText(), formattedMergedDate, issueNumber);
+            }
         }
-        String formattedMergedDate = BASIC_DATE_FORMAT.format(mergedDate);
-
-        System.out.printf("Pull Request: %s, User: %s, Merged at: %s, Linked Issue ID: %s%n", pullRequestLink, user.get("login").asText(), formattedMergedDate, issueNumber);
-    }
 
     public List<String> getTeamMembers() throws URISyntaxException, IOException, InterruptedException {
-        // GitHub API endpoint for team members
         String orgName = "jboss-set";
         String teamName = "set";
         URI uri = new URI(String.format("https://api.github.com/orgs/%s/teams/%s/members", orgName, teamName));
@@ -188,22 +178,15 @@ public class GitHubApi {
     }
 
     private boolean isClosedBeforeDate(JsonNode pullRequests, Date specifiedDate) throws ParseException {
-        // Check if the pullRequests node is an array and not empty
         if (!pullRequests.isEmpty()) {
             // Get the last entry in the array
             JsonNode lastPullRequest = pullRequests.get(pullRequests.size() - 1);
-
-            // Get the "closed_at" value (returns null if field is absent)
             String closedAtString = lastPullRequest.get("closed_at").asText("");
-
-            // Parse the "closed_at" value as a Date
             Date closedAtDate = PR_DATE_FORMAT.parse(closedAtString);
 
             return closedAtDate.before(specifiedDate);
 
         }
-
-        // Return false if any condition fails
         return false;
     }
 

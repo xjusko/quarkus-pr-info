@@ -31,22 +31,14 @@ public class Main {
             return;
         }
 
-        // Get team members' logins
-
         List<String> logins = gitHubApi.getTeamMembers();
-
-        // Fetch all pull requests (excluding those created by "dependabot" and with state "closed")
         List<JsonNode> pullRequests = gitHubApi.getPullRequests(logins);
 
-        // Check if there are any pull requests
         if (pullRequests.isEmpty()) {
             System.out.println("No pull requests found for the specified users.");
             System.exit(0);
         }
 
-        // Print information for each pull request
-        for (JsonNode pullRequest : pullRequests) {
-            gitHubApi.printPullRequestInfo(pullRequest);
-        }
+        gitHubApi.printPullRequestInfo(pullRequests);
     }
 }
