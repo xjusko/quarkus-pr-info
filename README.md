@@ -12,6 +12,25 @@ mvn clean install
 
 This will compile the code, run tests, and create an executable JAR file in the `target` directory.
 
+## Prerequisites
+
+Before running the application, you need to obtain a GitHub token with the "read:org" permission. Follow the steps below to create a token:
+
+1. **Login to GitHub**
+
+2. **Navigate to Settings:**
+   Click on your profile picture in the top right corner of GitHub and select "Settings" from the dropdown menu.
+
+3. **Access Developer Settings:**
+   In the left sidebar, click on "Developer settings."
+
+4. **Generate a New Token:**
+   - Click on "Personal access tokens" under "Access tokens."
+   - Under "Select scopes," ensure that only the "read:org" permission is selected.
+   - Click "Generate token."
+
+5. **Copy the Token**
+
 ## Running the Application
 
 After building the project, you can run the application using the generated JAR file. Use the following command:
