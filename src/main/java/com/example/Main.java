@@ -39,6 +39,6 @@ public class Main {
             System.exit(0);
         }
 
-        gitHubApi.printPullRequestInfo(pullRequests);
+        gitHubApi.printPullRequestInfo(pullRequests, logins);
     }
 }

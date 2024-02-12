@@ -11,9 +11,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -130,24 +128,48 @@ public class GitHubApi {
         return allPullRequests;
     }
 
-    public void printPullRequestInfo(List<JsonNode> pullRequests) {
-        for (JsonNode pullRequest: pullRequests) {
+    public void printPullRequestInfo(List<JsonNode> pullRequests, List<String> teamMembers) {
+        Map<String, List<JsonNode>> userPullRequestsMap = new HashMap<>();
+
+        for (JsonNode pullRequest : pullRequests) {
             JsonNode user = pullRequest.get("user");
-            String pullRequestLink = getPullRequestLink(pullRequest.get("number").asInt());
-            String body = pullRequest.get("body").asText();
-            String issueNumber = extractIssueNumberFromBody(body);
+            String login = user.get("login").asText();
 
-            Date mergedDate;
-            try {
-                mergedDate = PR_DATE_FORMAT.parse(pullRequest.get("merged_at").asText());
-            } catch (ParseException e) {
-                throw new RuntimeException("Error parsing date", e);
-            }
-            String formattedMergedDate = BASIC_DATE_FORMAT.format(mergedDate);
-
-            System.out.printf("Pull Request: %s, User: %s, Merged at: %s, Linked Issue ID: %s%n", pullRequestLink, user.get("login").asText(), formattedMergedDate, issueNumber);
+            // Check if the user is in the team members list
+            if (teamMembers.contains(login)) {
+                userPullRequestsMap.computeIfAbsent(login, k -> new ArrayList<>()).add(pullRequest);
             }
         }
+
+        // Print the grouped pull requests
+        for (Map.Entry<String, List<JsonNode>> entry : userPullRequestsMap.entrySet()) {
+            System.out.println(entry.getKey() + ":");
+            for (JsonNode pullRequest : entry.getValue()) {
+                printSinglePullRequestInfo(pullRequest);
+            }
+            System.out.println(); // Add a newline between users
+        }
+    }
+
+    private void printSinglePullRequestInfo(JsonNode pullRequest) {
+        String pullRequestLink = getPullRequestLink(pullRequest.get("number").asInt());
+        String body = pullRequest.get("body").asText();
+        String issueNumber = extractIssueNumberFromBody(body);
+
+        Date mergedDate;
+        try {
+            mergedDate = PR_DATE_FORMAT.parse(pullRequest.get("merged_at").asText());
+        } catch (ParseException e) {
+            throw new RuntimeException("Error parsing date", e);
+        }
+        String formattedMergedDate = BASIC_DATE_FORMAT.format(mergedDate);
+
+        System.out.printf("    - Pull Request: %s%n", pullRequestLink);
+        System.out.printf("      Merged at: %s%n", formattedMergedDate);
+        System.out.printf("      Linked Issue ID: %s%n", issueNumber);
+    }
+
+
 
     public List<String> getTeamMembers() throws URISyntaxException, IOException, InterruptedException {
         String orgName = "jboss-set";
