@@ -78,12 +78,11 @@ public class GitHubApi {
 
             if (!"dependabot[bot]".equals(user.get("login").asText())
                     && "closed".equals(pr.get("state").asText())
-                    && logins.contains(user.get("login").asText())
-                    && !pr.get("merged_at").isNull()) {
+                    && !pr.get("pull_request").get("merged_at").isNull()) {
 
                 Date mergedDate;
                 try {
-                    mergedDate = PR_DATE_FORMAT.parse(pr.get("merged_at").asText());
+                    mergedDate = PR_DATE_FORMAT.parse(pr.get("pull_request").get("merged_at").asText());
                 } catch (ParseException e) {
                     throw new RuntimeException("Error parsing date", e);
                 }
@@ -98,56 +97,61 @@ public class GitHubApi {
         return filteredPullRequests;
     }
 
-    public List<JsonNode> getPullRequests(List<String> logins) throws URISyntaxException, IOException, InterruptedException, ParseException {
-        List<JsonNode> allPullRequests = new ArrayList<>();
+    public void run(List<String> logins) throws URISyntaxException, IOException, InterruptedException, ParseException {
+        String searchQuery;
 
-        int page = 1; // Initialize page counter
+        int page = 1;
+        boolean matchedPR = false; // check if any pull request was matched and written out
+        for (String login : logins) {
+             searchQuery = String.format("is:pr+repo:%s/%s+state:closed+author:%s", repoOwner, repoName, login);
+            List<JsonNode> userPRs = new ArrayList<>();
 
-        while (true) {
-            // Get the list of pull requests from the specified repository
-            URI uri = new URI(String.format("https://api.github.com/repos/%s/%s/pulls?state=closed&per_page=100&page=%d", repoOwner, repoName, page));
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(uri)
-                    .header("Authorization", "token " + github_token)
-                    .build();
 
-            HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+            while (true) {
+                HttpResponse<String> response = getApiResponse(String.format("https://api.github.com/search/issues?q=%s&per_page=100&page=%d", searchQuery, page));
 
-            // Check if the response is valid JSON
-            JsonNode pullRequests = new ObjectMapper().readTree(response.body());
+                if (response.statusCode() == 403) {
 
-            List<JsonNode> filteredPullRequests = filterPullRequests(pullRequests, logins, startDate, endDate);
-            allPullRequests.addAll(filteredPullRequests);
+                    System.out.println("%n%nYour API fetching limit has been exceeded, please wait for 1 min");
+                    return;
+                }
+                // Check if the response is valid JSON
+                JsonNode pullRequests = new ObjectMapper().readTree(response.body()).get("items");
 
-            if (!response.headers().firstValue("Link").orElse("").contains("rel=\"next\"") || isClosedBeforeDate(pullRequests, startDate)) {
-                break; // No more pages, exit the loop
+                List<JsonNode> filteredPullRequests = filterPullRequests(pullRequests, logins, startDate, endDate);
+                userPRs.addAll(filteredPullRequests);
+
+                if (!response.headers().firstValue("Link").orElse("").contains("rel=\"next\"") || isClosedBeforeDate(pullRequests, startDate)) {
+                    break; // No more pages, exit the loop
+                }
+                page++;
             }
-
-            page++;
+            if (!userPRs.isEmpty()) {
+                printPullRequestInfo(userPRs, login);
+                matchedPR = true;
+            }
         }
-        return allPullRequests;
+        if (!matchedPR) {
+            System.out.println("No pull requests found for the specified date.");
+        }
+
     }
 
-    public void printPullRequestInfo(List<JsonNode> pullRequests, List<String> teamMembers) {
-        Map<String, List<JsonNode>> userPullRequestsMap = new HashMap<>();
+    private HttpResponse<String> getApiResponse(String searchQuery) throws URISyntaxException, IOException, InterruptedException {
+        URI uri = new URI(searchQuery);
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(uri)
+                .header("Authorization", "token " + github_token)
+                .build();
 
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private void printPullRequestInfo(List<JsonNode> pullRequests, String login) {
+
+        System.out.println(login + ":");
         for (JsonNode pullRequest : pullRequests) {
-            JsonNode user = pullRequest.get("user");
-            String login = user.get("login").asText();
-
-            // Check if the user is in the team members list
-            if (teamMembers.contains(login)) {
-                userPullRequestsMap.computeIfAbsent(login, k -> new ArrayList<>()).add(pullRequest);
-            }
-        }
-
-        // Print the grouped pull requests
-        for (Map.Entry<String, List<JsonNode>> entry : userPullRequestsMap.entrySet()) {
-            System.out.println(entry.getKey() + ":");
-            for (JsonNode pullRequest : entry.getValue()) {
-                printSinglePullRequestInfo(pullRequest);
-            }
-            System.out.println(); // Add a newline between users
+            printSinglePullRequestInfo(pullRequest);
         }
     }
 
@@ -158,7 +162,7 @@ public class GitHubApi {
 
         Date mergedDate;
         try {
-            mergedDate = PR_DATE_FORMAT.parse(pullRequest.get("merged_at").asText());
+            mergedDate = PR_DATE_FORMAT.parse(pullRequest.get("pull_request").get("merged_at").asText());
         } catch (ParseException e) {
             throw new RuntimeException("Error parsing date", e);
         }
@@ -166,7 +170,8 @@ public class GitHubApi {
 
         System.out.printf("    - Pull Request: %s%n", pullRequestLink);
         System.out.printf("      Merged at: %s%n", formattedMergedDate);
-        System.out.printf("      Linked Issue ID: %s%n", issueNumber);
+        System.out.printf("      Linked Issue ID: %s%n%n", issueNumber);
+
     }
 
 
@@ -174,16 +179,8 @@ public class GitHubApi {
     public List<String> getTeamMembers() throws URISyntaxException, IOException, InterruptedException {
         String orgName = "jboss-set";
         String teamName = "set";
-        URI uri = new URI(String.format("https://api.github.com/orgs/%s/teams/%s/members", orgName, teamName));
+        HttpResponse<String> response = getApiResponse(String.format("https://api.github.com/orgs/%s/teams/%s/members", orgName, teamName));
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(uri)
-                .header("Authorization", "token " + github_token)
-                .build();
-
-        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-
-        // Make the API request using the HttpClient and extract logins
         JsonNode teamMembers = new ObjectMapper().readTree(response.body());
         List<String> logins = new ArrayList<>();
 

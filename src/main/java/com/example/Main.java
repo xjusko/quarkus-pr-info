@@ -32,13 +32,7 @@ public class Main {
         }
 
         List<String> logins = gitHubApi.getTeamMembers();
-        List<JsonNode> pullRequests = gitHubApi.getPullRequests(logins);
+        gitHubApi.run(logins);
 
-        if (pullRequests.isEmpty()) {
-            System.out.println("No pull requests found for the specified users.");
-            System.exit(0);
-        }
-
-        gitHubApi.printPullRequestInfo(pullRequests, logins);
     }
 }
