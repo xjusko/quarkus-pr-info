@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
 public class GitHubApi {
 
     public final SimpleDateFormat PR_DATE_FORMAT = createDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
-    private String github_token;
+    private final String github_token;
     private Date startDate = new Date(Long.MIN_VALUE);
     private Date endDate = new Date(Long.MAX_VALUE);
     private final SimpleDateFormat BASIC_DATE_FORMAT = createDateFormat("dd-MM-yyyy");
@@ -34,7 +34,8 @@ public class GitHubApi {
         try {
             this.startDate = BASIC_DATE_FORMAT.parse(startDate);
         } catch (ParseException e) {
-            throw new RuntimeException("The provided date format is incorrect. Please use the format dd-MM-yyyy, e.g. 25-02-2022");
+            System.out.println("The provided arguments do not correspond to any possible combinations. Check README for possible arguments");
+            System.exit(0);
         }
     }
 
@@ -42,9 +43,10 @@ public class GitHubApi {
         this.github_token = github_token;
         try {
             this.startDate = BASIC_DATE_FORMAT.parse(endDate);
-            this.startDate = BASIC_DATE_FORMAT.parse(startDate);
+            this.endDate = BASIC_DATE_FORMAT.parse(startDate);
         } catch (ParseException e) {
-            throw new RuntimeException("The provided date format is incorrect. Please use the format dd-MM-yyyy, e.g. 25-02-2022");
+            System.out.println("The provided arguments do not correspond to any possible combinations. Check README for possible arguments");
+            System.exit(0);
         }
     }
 
@@ -70,7 +72,7 @@ public class GitHubApi {
         }
     }
 
-    public List<JsonNode> filterPullRequests(JsonNode pullRequests, List<String> logins, Date startDate, Date endDate) {
+    public List<JsonNode> filterPullRequests(JsonNode pullRequests, Date startDate, Date endDate) {
         List<JsonNode> filteredPullRequests = new ArrayList<>();
 
         for (JsonNode pr : pullRequests) {
@@ -99,26 +101,25 @@ public class GitHubApi {
 
     public void run(List<String> logins) throws URISyntaxException, IOException, InterruptedException, ParseException {
         String searchQuery;
+        StringBuilder allPullRequestsInfo = new StringBuilder();
 
-        int page = 1;
-        boolean matchedPR = false; // check if any pull request was matched and written out
         for (String login : logins) {
              searchQuery = String.format("is:pr+repo:%s/%s+state:closed+author:%s", repoOwner, repoName, login);
             List<JsonNode> userPRs = new ArrayList<>();
-
+            int page = 1;
 
             while (true) {
                 HttpResponse<String> response = getApiResponse(String.format("https://api.github.com/search/issues?q=%s&per_page=100&page=%d", searchQuery, page));
 
                 if (response.statusCode() == 403) {
-
-                    System.out.println("%n%nYour API fetching limit has been exceeded, please wait for 1 min");
+                    System.out.println("ERROR:");
+                    System.out.println("Your API fetching limit has been exceeded, please wait for 1 min");
                     return;
                 }
                 // Check if the response is valid JSON
                 JsonNode pullRequests = new ObjectMapper().readTree(response.body()).get("items");
 
-                List<JsonNode> filteredPullRequests = filterPullRequests(pullRequests, logins, startDate, endDate);
+                List<JsonNode> filteredPullRequests = filterPullRequests(pullRequests, startDate, endDate);
                 userPRs.addAll(filteredPullRequests);
 
                 if (!response.headers().firstValue("Link").orElse("").contains("rel=\"next\"") || isClosedBeforeDate(pullRequests, startDate)) {
@@ -127,12 +128,17 @@ public class GitHubApi {
                 page++;
             }
             if (!userPRs.isEmpty()) {
-                printPullRequestInfo(userPRs, login);
-                matchedPR = true;
+                allPullRequestsInfo.append(login).append(":\n");
+                for (JsonNode pullRequest : userPRs) {
+                    allPullRequestsInfo.append(getSinglePullRequestInfo(pullRequest));
+                }
+                allPullRequestsInfo.append("\n");
             }
         }
-        if (!matchedPR) {
+        if (allPullRequestsInfo.length() == 0) {
             System.out.println("No pull requests found for the specified date.");
+        } else {
+            System.out.println(allPullRequestsInfo);
         }
 
     }
@@ -147,15 +153,8 @@ public class GitHubApi {
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 
-    private void printPullRequestInfo(List<JsonNode> pullRequests, String login) {
-
-        System.out.println(login + ":");
-        for (JsonNode pullRequest : pullRequests) {
-            printSinglePullRequestInfo(pullRequest);
-        }
-    }
-
-    private void printSinglePullRequestInfo(JsonNode pullRequest) {
+    private String getSinglePullRequestInfo(JsonNode pullRequest) {
+        StringBuilder prInfo = new StringBuilder();
         String pullRequestLink = getPullRequestLink(pullRequest.get("number").asInt());
         String body = pullRequest.get("body").asText();
         String issueNumber = extractIssueNumberFromBody(body);
@@ -168,11 +167,13 @@ public class GitHubApi {
         }
         String formattedMergedDate = BASIC_DATE_FORMAT.format(mergedDate);
 
-        System.out.printf("    - Pull Request: %s%n", pullRequestLink);
-        System.out.printf("      Merged at: %s%n", formattedMergedDate);
-        System.out.printf("      Linked Issue ID: %s%n%n", issueNumber);
+        prInfo.append("    - Pull Request: ").append(pullRequestLink).append("\n");
+        prInfo.append("      Merged at: ").append(formattedMergedDate).append("\n");
+        prInfo.append("      Linked Issue ID: ").append(issueNumber).append("\n\n");
 
+        return prInfo.toString();
     }
+
 
 
 
@@ -181,6 +182,10 @@ public class GitHubApi {
         String teamName = "set";
         HttpResponse<String> response = getApiResponse(String.format("https://api.github.com/orgs/%s/teams/%s/members", orgName, teamName));
 
+        if (response.statusCode() != 200) {
+            System.out.println("Could not get team_members from GitHub organization, you have probably entered wrong GitHub token.");
+            System.exit(0);
+        }
         JsonNode teamMembers = new ObjectMapper().readTree(response.body());
         List<String> logins = new ArrayList<>();
 
